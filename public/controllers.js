@@ -11,4 +11,11 @@ index.get('/', async (ctx) => {
     ctx.response.body = html;
 })
 
+index.get('/qrcode', async (ctx) => {
+    const html = fs.readFileSync(path.join(__dirname, "./qrcode.html"));
+    // console.log(__dirname);
+    ctx.response.type = 'text/html;charset=UTF-8';
+    ctx.response.body = html;
+})
+
 module.exports = index;

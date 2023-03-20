@@ -1,10 +1,91 @@
 const { default: axios } = require("axios");
 const { mid } = require("../../../util/kugou_mid");
-const { kugou_request } = require("../../../util/kugou_request");
+const { kugou_app_request, kugou_request } = require("../../../util/kugou_request");
 const APIError = require("../../../middlewares/rest").APIError;
+const cryptoJs = require('crypto-js');
 
 
 let song = async (ctx) => {
+
+    if (ctx.request.method === 'GET') {
+        var aid = ctx.request.query.aid || '978031';
+        var hash = ctx.request.query.hash || '6b20b79b951cbd33b7db57a4c3abc3c6';
+        var audioid = ctx.request.query.audioid || '64531905';
+    } else if (ctx.request.method === 'POST') {
+        var aid = ctx.request.body.aid || '978031';
+        var hash = ctx.request.body.hash || '6b20b79b951cbd33b7db57a4c3abc3c6';
+        var audioid = ctx.request.body.audioid || '64531905';
+    }
+
+    const cacheData = global.cache.get(ctx.request.url);
+    if (cacheData) {
+        ctx.rest(cacheData);
+        return;
+    }
+
+    params = {
+        hash: hash.trim(),
+        mtype: "0",
+        album_id: aid.trim(),
+        album_audio_id: audioid.trim(),
+        module: "",
+        behavior: "play",
+        cmd: "26",
+        pid: "2",
+        vipType: "6",
+        ptype: "1",
+        pidversion: "3001",
+        page_id: "910038176",
+        ppage_id: "463467626,661004247",
+        //"isFreePart":"1",
+    }
+
+    Object.assign(params,{
+        clienttime: parseInt(Date.now() / 1000) + "",
+        area_code: "1",
+        clientver: "10659",
+        appid: "1005",
+        version: "10659",
+        userid: global.kugou_cookie.userid ? global.kugou_cookie.userid : "0",
+        token: global.kugou_cookie.token ? global.kugou_cookie.token : "",
+        mid: global.kugou_cookie.mid ? global.kugou_cookie.mid : mid(),
+        dfid: global.kugou_cookie.dfid ? global.kugou_cookie.dfid : "4Wy4GA4Zhelm3KWVHP0Jorgh",
+        uuid: "2811d5582c58459ec629a9a956a58923",
+    })
+    //计算key
+    const pidVersionSecret = "57ae12eb6890223e355ccfcb74edf70d"
+    params.key = cryptoJs.MD5(hash + pidVersionSecret + params.appid + params.mid + params.userid).toString()
+
+    //计算signature
+    const appkey = "OIlwieks28dk2k092lksi2UIkp"
+    let sig = ""
+    Object.keys(params).sort().forEach((key) => {
+        sig += key + "=" + params[key]
+    })
+    sig = appkey + sig + appkey
+    params.signature = cryptoJs.MD5(sig).toString()
+
+    let result = await axios.get('https://gateway.kugou.com/v3/url', {
+        params, 
+        headers: {
+            'User-Agent': 'Android712-AndroidPhone-10659-14-0-NetMusic-wifi',
+            'x-router': 'tracker.kugou.com'
+        },
+    });
+
+    //成功才缓存
+    if (result.data.status == 1) {
+        global.cache.set(ctx.request.url, result.data);
+    }
+    // if (result.data.url.length == 0) {
+    //throw new APIError("ERROR", result.data.errmsg)
+    //     throw new APIError("Song:url_notfound", "Song url is not found")
+    // }
+    ctx.rest(result.data);
+}
+
+
+let websong = async (ctx) => {
 
     if (ctx.request.method === 'GET') {
         var aid = ctx.request.query.aid || '978031';
@@ -131,6 +212,7 @@ let getsong = async (ctx) => {
 
 module.exports = {
     song,
+    websong,
     // songInfo
-    getsong
+    getsong,
 }
